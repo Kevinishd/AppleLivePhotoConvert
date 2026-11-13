@@ -15,7 +15,7 @@ namespace LivePhotoConvert.Core.External;
 public sealed class HeifDecoder : IAppleGainMapDecoder
 {
     /// <summary>与 <see cref="MagickImageConverter"/> 生成 JPEG 封面的质量一致。</summary>
-    private const int PrimaryJpegQuality = 95;
+    private const int PrimaryJpegQuality = 98;
 
     /// <summary>主图与增益图宽高比相差超过该比例视为方向不一致，拉伸会错位。</summary>
     private const double MaxAspectDeviation = 0.05;

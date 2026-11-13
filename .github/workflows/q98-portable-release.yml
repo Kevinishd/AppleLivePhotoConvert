@@ -1,0 +1,109 @@
+name: Build portable v4.0.0 (JPEG quality 98)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/q98-portable-release.yml'
+      - 'src/LivePhotoConvert.Core/External/MagickImageConverter.cs'
+      - 'src/LivePhotoConvert.Core/External/HeifDecoder.cs'
+      - 'src/LivePhotoConvert.Core/Media/UltraHdr/AppleGainMapConverter.cs'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: q98-portable-release
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Native AOT win-x64 + GitHub Release
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: 检出本仓库（含质量改动）
+        uses: actions/checkout@v4
+        with:
+          path: fork
+
+      - name: 检出上游 v4.0.0 源码
+        uses: actions/checkout@v4
+        with:
+          repository: ZhiQiu-Kinsey/AppleLivePhotoConvert
+          ref: v4.0.0
+          path: upstream
+
+      - name: 应用本仓库的 98 质量改动并校验
+        shell: pwsh
+        run: |
+          $files = @(
+            'src/LivePhotoConvert.Core/External/MagickImageConverter.cs',
+            'src/LivePhotoConvert.Core/External/HeifDecoder.cs',
+            'src/LivePhotoConvert.Core/Media/UltraHdr/AppleGainMapConverter.cs'
+          )
+          foreach ($f in $files) {
+            Copy-Item -LiteralPath (Join-Path 'fork' $f) -Destination (Join-Path 'upstream' $f) -Force
+          }
+          $checks = @(
+            @{ Path = 'upstream/src/LivePhotoConvert.Core/External/MagickImageConverter.cs'; Pattern = 'JpegQuality = 98' },
+            @{ Path = 'upstream/src/LivePhotoConvert.Core/External/HeifDecoder.cs'; Pattern = 'PrimaryJpegQuality = 98' },
+            @{ Path = 'upstream/src/LivePhotoConvert.Core/Media/UltraHdr/AppleGainMapConverter.cs'; Pattern = 'JpegQuality = 98' }
+          )
+          foreach ($c in $checks) {
+            if (-not (Select-String -LiteralPath $c.Path -Pattern $c.Pattern -SimpleMatch -Quiet)) {
+              throw "质量改动未生效: $($c.Path)"
+            }
+          }
+          Write-Host '三处 JPEG 质量均已确认为 98'
+
+      - name: 安装 .NET（版本取自 global.json）
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: upstream/global.json
+
+      - name: Native AOT 发布
+        working-directory: upstream
+        shell: pwsh
+        run: dotnet publish src/LivePhotoConvert.Desktop/LivePhotoConvert.Desktop.csproj -r win-x64 -c Release -o dist/aot -p:TreatWarningsAsErrors=true
+
+      - name: 打包便携 ZIP 与 SHA256
+        shell: pwsh
+        run: |
+          Remove-Item -Path upstream/dist/aot/*.pdb -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          $zip = 'release/LivePhotoConvert-v4.0.0-q98-win-x64-Portable.zip'
+          Compress-Archive -Path upstream/dist/aot/* -DestinationPath $zip -CompressionLevel Optimal
+          $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  $(Split-Path $zip -Leaf)" | Out-File -FilePath release/SHA256SUMS.txt -Encoding utf8
+          Get-ChildItem release | ForEach-Object { Write-Host ("{0,12:N0}  {1}" -f $_.Length, $_.Name) }
+
+      - name: 上传构建产物（便于排查）
+        uses: actions/upload-artifact@v4
+        with:
+          name: q98-portable
+          path: release/
+          if-no-files-found: error
+
+      - name: 发布 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v4.0.0-q98
+          name: LivePhotoConvert v4.0.0 · JPEG 质量 98 便携版
+          fail_on_unmatched_files: true
+          files: release/*
+          body: |
+            基于上游 `ZhiQiu-Kinsey/AppleLivePhotoConvert` 的 **v4.0.0** 源码编译的 Windows x64 便携版。
+
+            唯一改动：把封面 JPEG 质量从 95 提升到 **98**，HDR 增益图灰度 JPEG 从 90 提升到 **98**。
+
+            - `MagickImageConverter.cs`：SDR 封面 JPEG → 98
+            - `HeifDecoder.cs`：保留 HDR 时的主图 JPEG（`heif-dec -q`）→ 98
+            - `AppleGainMapConverter.cs`：HDR 增益图灰度 JPEG → 98
+
+            其余功能、EXIF / XMP / Ultra HDR 组装、内嵌视频逻辑与官方 v4.0.0 完全一致。
+            这是纯解压版（不含 Velopack 安装器与自动更新程序），解压后直接运行 `LivePhotoConvert.exe`；
+            ExifTool / FFmpeg / heif-enc 仍需在「依赖引擎」页首次下载。
+            `SHA256SUMS.txt` 提供压缩包校验值。

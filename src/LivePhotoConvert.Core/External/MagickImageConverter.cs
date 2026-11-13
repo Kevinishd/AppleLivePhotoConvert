@@ -12,6 +12,9 @@ namespace LivePhotoConvert.Core.External;
 /// </remarks>
 public sealed class MagickImageConverter : IImageConverter
 {
+    /// <summary>JPEG 封面质量；与 <see cref="HeifDecoder"/> 的 HDR 主图质量一致。</summary>
+    public const int JpegQuality = 98;
+
     public static MagickImageConverter Instance { get; } = new();
 
     /// <summary>当前平台的 Magick.NET 原生库是否带有 HEIC 编码器。</summary>
@@ -19,7 +22,7 @@ public sealed class MagickImageConverter : IImageConverter
         MagickNET.SupportedFormats.Any(format => format.Format == MagickFormat.Heic && format.SupportsWriting);
 
     public Task ConvertToJpegAsync(string sourcePath, string destinationPath, CancellationToken cancellationToken = default) =>
-        ConvertAsync(sourcePath, destinationPath, MagickFormat.Jpeg, 95, cancellationToken);
+        ConvertAsync(sourcePath, destinationPath, MagickFormat.Jpeg, JpegQuality, cancellationToken);
 
     public Task ConvertToHeicAsync(string sourcePath, string destinationPath, int quality, CancellationToken cancellationToken = default) =>
         SupportsHeicEncoding

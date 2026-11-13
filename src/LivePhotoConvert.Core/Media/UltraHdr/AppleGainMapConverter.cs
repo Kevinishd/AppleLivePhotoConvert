@@ -12,8 +12,8 @@ namespace LivePhotoConvert.Core.Media.UltraHdr;
 /// </remarks>
 public static class AppleGainMapConverter
 {
-    /// <summary>增益图体积只占主图约 3%，质量 90 已看不出块效应。</summary>
-    public const int JpegQuality = 90;
+    /// <summary>增益图体积只占主图约 3%，质量 98 已看不出块效应。</summary>
+    public const int JpegQuality = 98;
 
     /// <summary>
     /// Apple 像素值 → ISO 像素值的 256 项查找表。
